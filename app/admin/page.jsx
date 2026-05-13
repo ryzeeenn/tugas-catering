@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 export default function AdminPage() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState("");
+  const [wrongPassword, setWrongPassword] = useState(false);
   const [activeTab, setActiveTab] = useState("pemesanan");
   const [pemesanan, setPemesanan] = useState([]);
   const [pelanggan, setPelanggan] = useState([]);
@@ -13,16 +15,14 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState(null);
 
-  // Proteksi: Cek auth saat component mount
+  // Cek apakah sudah login
   useEffect(() => {
-    const auth = localStorage.getItem("culinexia_admin");
-    if (auth !== "true") {
-      router.replace("/admin/login");
-    } else {
+    const adminAuth = localStorage.getItem("culinexia_admin_auth");
+    if (adminAuth === "true") {
       setIsAuthenticated(true);
       fetchData();
     }
-  }, [router]);
+  }, []);
 
   // Fetch semua data
   const fetchData = async () => {
@@ -42,13 +42,35 @@ export default function AdminPage() {
       setPelanggan(dataPelanggan);
       setPengiriman(dataPengiriman);
     } catch (err) {
-      console.error("Error fetching admin data:", err);
+      console.error("Error fetching admin ", err);
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ FUNGSI UPDATE STATUS (BARU!)
+  // Fungsi login
+  const handleLogin = (e) => {
+    e.preventDefault();
+    // GANTI PASSWORD DI SINI!
+    if (password === "admin123") {
+      localStorage.setItem("culinexia_admin_auth", "true");
+      setIsAuthenticated(true);
+      setWrongPassword(false);
+      fetchData();
+    } else {
+      setWrongPassword(true);
+    }
+  };
+
+  // Fungsi logout
+  const handleLogout = () => {
+    localStorage.removeItem("culinexia_admin_auth");
+    setIsAuthenticated(false);
+    setPassword("");
+    router.refresh();
+  };
+
+  // Fungsi update status
   const handleStatusChange = async (id, newStatus) => {
     setUpdatingId(id);
     try {
@@ -63,7 +85,7 @@ export default function AdminPage() {
 
       if (res.ok) {
         alert("✅ Status berhasil diupdate!");
-        fetchData(); // Refresh data
+        fetchData();
       } else {
         const error = await res.json();
         alert("❌ " + error.error);
@@ -76,20 +98,134 @@ export default function AdminPage() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("culinexia_admin");
-    router.replace("/admin/login");
-  };
+  // Tampilkan form login jika belum authenticated
+  if (!isAuthenticated) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "linear-gradient(135deg, #fdf2f0 0%, #fff5f5 100%)",
+          padding: "20px",
+        }}
+      >
+        <div
+          style={{
+            background: "white",
+            padding: "40px",
+            borderRadius: "16px",
+            boxShadow: "0 8px 30px rgba(0,0,0,0.1)",
+            maxWidth: "400px",
+            width: "100%",
+          }}
+        >
+          <div style={{ textAlign: "center", marginBottom: "32px" }}>
+            <h1 style={{ fontSize: "1.8rem", marginBottom: "8px" }}>
+              🔐 Admin Panel
+            </h1>
+            <p style={{ color: "var(--gray)", fontSize: "0.9rem" }}>
+              Culinexia Dashboard
+            </p>
+          </div>
 
-  if (!isAuthenticated) return null;
+          <form onSubmit={handleLogin}>
+            <div style={{ marginBottom: "20px" }}>
+              <label
+                style={{
+                  display: "block",
+                  marginBottom: "8px",
+                  fontWeight: "600",
+                  color: "var(--dark)",
+                }}
+              >
+                Password Admin
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "14px",
+                  border: "2px solid var(--gray-light)",
+                  borderRadius: "10px",
+                  fontSize: "1rem",
+                  outline: "none",
+                  transition: "border-color 0.3s",
+                }}
+                placeholder="Masukkan password"
+                autoFocus
+                onFocus={(e) => (e.target.style.borderColor = "var(--primary)")}
+                onBlur={(e) =>
+                  (e.target.style.borderColor = "var(--gray-light)")
+                }
+              />
+              {wrongPassword && (
+                <div
+                  style={{
+                    marginTop: "12px",
+                    padding: "10px",
+                    background: "#fee2e2",
+                    color: "#dc2626",
+                    borderRadius: "8px",
+                    fontSize: "0.85rem",
+                    textAlign: "center",
+                  }}
+                >
+                  ❌ Password salah!
+                </div>
+              )}
+            </div>
+            <button
+              type="submit"
+              style={{
+                width: "100%",
+                padding: "14px",
+                background: "var(--primary)",
+                color: "white",
+                border: "none",
+                borderRadius: "10px",
+                fontWeight: "700",
+                cursor: "pointer",
+                fontSize: "1rem",
+                transition: "all 0.3s",
+              }}
+            >
+              Masuk Dashboard
+            </button>
+          </form>
+          <div style={{ textAlign: "center", marginTop: "20px" }}>
+            <a
+              href="/"
+              style={{
+                color: "var(--primary)",
+                textDecoration: "none",
+                fontSize: "0.9rem",
+                fontWeight: "500",
+              }}
+            >
+              ← Kembali ke Beranda
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Tampilkan loading
   if (loading) {
     return (
-      <div style={{ paddingTop: "120px", textAlign: "center" }}>
+      <div
+        style={{ paddingTop: "120px", textAlign: "center", minHeight: "100vh" }}
+      >
         <h2>Memuat dashboard...</h2>
       </div>
     );
   }
 
+  // Tampilkan dashboard admin
   return (
     <div
       style={{
@@ -343,7 +479,6 @@ export default function AdminPage() {
                               </span>
                             </td>
                             <td style={{ padding: "12px" }}>
-                              {/* DROPDOWN UPDATE STATUS */}
                               <select
                                 value={p.status_pesan}
                                 onChange={(e) =>
