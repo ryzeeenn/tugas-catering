@@ -11,6 +11,7 @@ export default function AdminPage() {
   const [pelanggan, setPelanggan] = useState([]);
   const [pengiriman, setPengiriman] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [updatingId, setUpdatingId] = useState(null);
 
   // Proteksi: Cek auth saat component mount
   useEffect(() => {
@@ -23,20 +24,55 @@ export default function AdminPage() {
     }
   }, [router]);
 
+  // Fetch semua data
   const fetchData = async () => {
     try {
+      setLoading(true);
       const [resPesanan, resPelanggan, resPengiriman] = await Promise.all([
         fetch("/api/pemesanan"),
         fetch("/api/pelanggan"),
         fetch("/api/pengiriman"),
       ]);
-      setPemesanan(await resPesanan.json());
-      setPelanggan(await resPelanggan.json());
-      setPengiriman(await resPengiriman.json());
+
+      const dataPesanan = await resPesanan.json();
+      const dataPelanggan = await resPelanggan.json();
+      const dataPengiriman = await resPengiriman.json();
+
+      setPemesanan(dataPesanan);
+      setPelanggan(dataPelanggan);
+      setPengiriman(dataPengiriman);
     } catch (err) {
       console.error("Error fetching admin data:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ✅ FUNGSI UPDATE STATUS (BARU!)
+  const handleStatusChange = async (id, newStatus) => {
+    setUpdatingId(id);
+    try {
+      const res = await fetch("/api/pemesanan", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: id,
+          status_pesan: newStatus,
+        }),
+      });
+
+      if (res.ok) {
+        alert("✅ Status berhasil diupdate!");
+        fetchData(); // Refresh data
+      } else {
+        const error = await res.json();
+        alert("❌ " + error.error);
+      }
+    } catch (error) {
+      console.error("Error updating status:", error);
+      alert("❌ Terjadi kesalahan saat update status");
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -46,12 +82,13 @@ export default function AdminPage() {
   };
 
   if (!isAuthenticated) return null;
-  if (loading)
+  if (loading) {
     return (
       <div style={{ paddingTop: "120px", textAlign: "center" }}>
         <h2>Memuat dashboard...</h2>
       </div>
     );
+  }
 
   return (
     <div
@@ -88,7 +125,7 @@ export default function AdminPage() {
           </button>
         </div>
 
-        {/* Stats */}
+        {/* Stats Cards */}
         <div
           style={{
             display: "grid",
@@ -135,7 +172,7 @@ export default function AdminPage() {
             >
               {pelanggan.length}
             </div>
-            <div style={{ color: "var(--gray)" }}>Pelanggan</div>
+            <div style={{ color: "var(--gray)" }}>Total Pelanggan</div>
           </div>
           <div
             style={{
@@ -155,7 +192,30 @@ export default function AdminPage() {
             >
               {pengiriman.length}
             </div>
-            <div style={{ color: "var(--gray)" }}>Pengiriman</div>
+            <div style={{ color: "var(--gray)" }}>Pengiriman Aktif</div>
+          </div>
+          <div
+            style={{
+              background: "white",
+              padding: "24px",
+              borderRadius: "12px",
+              boxShadow: "var(--shadow-md)",
+              textAlign: "center",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "2.5rem",
+                fontWeight: "800",
+                color: "#f59e0b",
+              }}
+            >
+              Rp{" "}
+              {pemesanan
+                .reduce((sum, p) => sum + (p.total_bayar || 0), 0)
+                .toLocaleString("id-ID")}
+            </div>
+            <div style={{ color: "var(--gray)" }}>Total Pendapatan</div>
           </div>
         </div>
 
@@ -188,6 +248,7 @@ export default function AdminPage() {
                   fontWeight: "600",
                   cursor: "pointer",
                   textTransform: "capitalize",
+                  transition: "all 0.3s ease",
                 }}
               >
                 {tab} (
@@ -200,7 +261,9 @@ export default function AdminPage() {
               </button>
             ))}
           </div>
+
           <div style={{ padding: "32px" }}>
+            {/* Tab Pemesanan */}
             {activeTab === "pemesanan" && (
               <div>
                 <h2 style={{ marginBottom: "20px" }}>Daftar Pemesanan</h2>
@@ -225,104 +288,234 @@ export default function AdminPage() {
                         <th style={{ padding: "12px", textAlign: "left" }}>
                           Status
                         </th>
+                        <th style={{ padding: "12px", textAlign: "left" }}>
+                          Aksi
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-                      {pemesanan.map((p) => (
-                        <tr
-                          key={p.id}
-                          style={{
-                            borderBottom: "1px solid var(--gray-light)",
-                          }}
-                        >
-                          <td style={{ padding: "12px" }}>{p.no_resi}</td>
-                          <td style={{ padding: "12px" }}>
-                            {p.pelanggan?.nama_pelanggan || "-"}
-                          </td>
-                          <td style={{ padding: "12px" }}>
-                            Rp {p.total_bayar?.toLocaleString("id-ID")}
-                          </td>
-                          <td style={{ padding: "12px" }}>
-                            <span
-                              style={{
-                                padding: "4px 12px",
-                                background:
-                                  p.status_pesan === "Selesai"
-                                    ? "#10b981"
-                                    : "#f59e0b",
-                                color: "white",
-                                borderRadius: "20px",
-                                fontSize: "0.85rem",
-                              }}
-                            >
-                              {p.status_pesan}
-                            </span>
+                      {pemesanan.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan="5"
+                            style={{
+                              padding: "40px",
+                              textAlign: "center",
+                              color: "var(--gray)",
+                            }}
+                          >
+                            Belum ada pemesanan
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        pemesanan.map((p) => (
+                          <tr
+                            key={p.id}
+                            style={{
+                              borderBottom: "1px solid var(--gray-light)",
+                            }}
+                          >
+                            <td style={{ padding: "12px" }}>{p.no_resi}</td>
+                            <td style={{ padding: "12px" }}>
+                              {p.pelanggan?.nama_pelanggan || "-"}
+                            </td>
+                            <td style={{ padding: "12px" }}>
+                              Rp {(p.total_bayar || 0).toLocaleString("id-ID")}
+                            </td>
+                            <td style={{ padding: "12px" }}>
+                              <span
+                                style={{
+                                  padding: "4px 12px",
+                                  background:
+                                    p.status_pesan === "Selesai"
+                                      ? "#10b981"
+                                      : p.status_pesan === "Sedang Diproses"
+                                        ? "#f59e0b"
+                                        : p.status_pesan === "Dibatalkan"
+                                          ? "#ef4444"
+                                          : "#3b82f6",
+                                  color: "white",
+                                  borderRadius: "20px",
+                                  fontSize: "0.85rem",
+                                }}
+                              >
+                                {p.status_pesan}
+                              </span>
+                            </td>
+                            <td style={{ padding: "12px" }}>
+                              {/* DROPDOWN UPDATE STATUS */}
+                              <select
+                                value={p.status_pesan}
+                                onChange={(e) =>
+                                  handleStatusChange(p.id, e.target.value)
+                                }
+                                disabled={updatingId === p.id}
+                                style={{
+                                  padding: "8px 12px",
+                                  borderRadius: "6px",
+                                  border: "2px solid var(--gray-light)",
+                                  cursor:
+                                    updatingId === p.id
+                                      ? "not-allowed"
+                                      : "pointer",
+                                  background:
+                                    updatingId === p.id ? "#f3f4f6" : "white",
+                                  opacity: updatingId === p.id ? 0.7 : 1,
+                                  fontSize: "0.9rem",
+                                }}
+                              >
+                                <option value="Menunggu Konfirmasi">
+                                  Menunggu Konfirmasi
+                                </option>
+                                <option value="Sedang Diproses">
+                                  Sedang Diproses
+                                </option>
+                                <option value="Menunggu Kurir">
+                                  Menunggu Kurir
+                                </option>
+                                <option value="Selesai">Selesai</option>
+                                <option value="Dibatalkan">Dibatalkan</option>
+                              </select>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
               </div>
             )}
+
+            {/* Tab Pelanggan */}
             {activeTab === "pelanggan" && (
-              <div style={{ display: "grid", gap: "16px" }}>
-                {pelanggan.map((p) => (
-                  <div
-                    key={p.id}
-                    style={{
-                      padding: "20px",
-                      background: "var(--cream)",
-                      borderRadius: "12px",
-                    }}
-                  >
-                    <strong>{p.nama_pelanggan}</strong>
-                    <p style={{ color: "var(--gray)", marginTop: "4px" }}>
-                      {p.email} • {p.telepon}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-            {activeTab === "pengiriman" && (
-              <div style={{ display: "grid", gap: "16px" }}>
-                {pengiriman.map((peng) => (
-                  <div
-                    key={peng.id}
-                    style={{
-                      padding: "20px",
-                      background: "var(--cream)",
-                      borderRadius: "12px",
-                    }}
-                  >
-                    <div
+              <div>
+                <h2 style={{ marginBottom: "20px" }}>Daftar Pelanggan</h2>
+                <div style={{ display: "grid", gap: "16px" }}>
+                  {pelanggan.length === 0 ? (
+                    <p
                       style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        marginBottom: "8px",
+                        textAlign: "center",
+                        color: "var(--gray)",
+                        padding: "40px",
                       }}
                     >
-                      <strong>Resi: {peng.pemesanan?.no_resi}</strong>
-                      <span
+                      Belum ada pelanggan
+                    </p>
+                  ) : (
+                    pelanggan.map((p) => (
+                      <div
+                        key={p.id}
                         style={{
-                          padding: "4px 12px",
-                          background:
-                            peng.status_kirim === "Tiba Ditujuan"
-                              ? "#10b981"
-                              : "#f59e0b",
-                          color: "white",
-                          borderRadius: "20px",
-                          fontSize: "0.85rem",
+                          padding: "20px",
+                          background: "var(--cream)",
+                          borderRadius: "12px",
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: "12px",
                         }}
                       >
-                        {peng.status_kirim}
-                      </span>
-                    </div>
-                    <p style={{ fontSize: "0.9rem", color: "var(--gray)" }}>
-                      Alamat: {peng.pemesanan?.pelanggan?.alamat1}
+                        <div>
+                          <strong style={{ fontSize: "1.1rem" }}>
+                            {p.nama_pelanggan}
+                          </strong>
+                          <p style={{ color: "var(--gray)", marginTop: "4px" }}>
+                            {p.email}
+                          </p>
+                        </div>
+                        <div>
+                          <p>
+                            <strong>Telepon:</strong> {p.telepon || "-"}
+                          </p>
+                          <p>
+                            <strong>Alamat:</strong> {p.alamat1 || "-"}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Tab Pengiriman */}
+            {activeTab === "pengiriman" && (
+              <div>
+                <h2 style={{ marginBottom: "20px" }}>Daftar Pengiriman</h2>
+                <div style={{ display: "grid", gap: "16px" }}>
+                  {pengiriman.length === 0 ? (
+                    <p
+                      style={{
+                        textAlign: "center",
+                        color: "var(--gray)",
+                        padding: "40px",
+                      }}
+                    >
+                      Belum ada pengiriman
                     </p>
-                  </div>
-                ))}
+                  ) : (
+                    pengiriman.map((peng) => (
+                      <div
+                        key={peng.id}
+                        style={{
+                          padding: "20px",
+                          background: "var(--cream)",
+                          borderRadius: "12px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            marginBottom: "12px",
+                          }}
+                        >
+                          <strong>
+                            No. Resi: {peng.pemesanan?.no_resi || "-"}
+                          </strong>
+                          <span
+                            style={{
+                              padding: "4px 12px",
+                              background:
+                                peng.status_kirim === "Tiba Ditujuan"
+                                  ? "#10b981"
+                                  : "#f59e0b",
+                              color: "white",
+                              borderRadius: "20px",
+                              fontSize: "0.85rem",
+                            }}
+                          >
+                            {peng.status_kirim}
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr",
+                            gap: "12px",
+                            fontSize: "0.9rem",
+                          }}
+                        >
+                          <div>
+                            <p>
+                              <strong>Pelanggan:</strong>{" "}
+                              {peng.pemesanan?.pelanggan?.nama_pelanggan || "-"}
+                            </p>
+                            <p>
+                              <strong>Telepon:</strong>{" "}
+                              {peng.pemesanan?.pelanggan?.telepon || "-"}
+                            </p>
+                          </div>
+                          <div>
+                            <p>
+                              <strong>Alamat:</strong>
+                            </p>
+                            <p>{peng.pemesanan?.pelanggan?.alamat1 || "-"}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             )}
           </div>
