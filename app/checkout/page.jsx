@@ -3,6 +3,10 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+// Force dynamic rendering to avoid build-time errors
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default function CheckoutPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -11,8 +15,10 @@ export default function CheckoutPage() {
   const [detailPemesanan, setDetailPemesanan] = useState([]);
   const [metodePembayaran, setMetodePembayaran] = useState([]);
   const [processing, setProcessing] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const id = searchParams.get("id");
     if (!id) {
       alert("ID pemesanan tidak ditemukan");
@@ -71,13 +77,50 @@ export default function CheckoutPage() {
     }
   };
 
-  if (loading)
+  // Show loading until mounted on client
+  if (!mounted || loading) {
     return (
-      <div style={{ paddingTop: "120px", textAlign: "center" }}>
-        <h2>Memuat data checkout...</h2>
+      <div
+        style={{
+          paddingTop: "120px",
+          paddingBottom: "80px",
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          <h2>Memuat data checkout...</h2>
+          <p style={{ color: "var(--gray)", marginTop: "8px" }}>
+            Mohon tunggu sebentar
+          </p>
+        </div>
       </div>
     );
-  if (!pemesanan) return null;
+  }
+
+  if (!pemesanan) {
+    return (
+      <div style={{ paddingTop: "120px", textAlign: "center" }}>
+        <h2>Data tidak ditemukan</h2>
+        <button
+          onClick={() => router.push("/")}
+          style={{
+            marginTop: "20px",
+            padding: "12px 24px",
+            background: "var(--primary)",
+            color: "white",
+            border: "none",
+            borderRadius: "8px",
+            cursor: "pointer",
+          }}
+        >
+          Kembali ke Beranda
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -127,7 +170,7 @@ export default function CheckoutPage() {
                 <strong>No. Resi:</strong> {pemesanan.no_resi}
               </p>
               <p>
-                <strong>Status:</strong>{" "}
+                <strong>Status:</strong>
                 <span
                   style={{
                     padding: "4px 12px",
@@ -138,6 +181,7 @@ export default function CheckoutPage() {
                     color: "white",
                     borderRadius: "20px",
                     fontSize: "0.85rem",
+                    marginLeft: "8px",
                   }}
                 >
                   {pemesanan.status_pesan}
@@ -213,14 +257,28 @@ export default function CheckoutPage() {
                     alignItems: "center",
                     cursor: "pointer",
                     transition: "all 0.3s",
+                    opacity:
+                      processing ||
+                      pemesanan.status_pesan !== "Menunggu Konfirmasi"
+                        ? 0.6
+                        : 1,
                   }}
-                  onClick={() => handleBayar(m.id)}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.borderColor = "var(--primary)")
+                  onClick={() =>
+                    !processing &&
+                    pemesanan.status_pesan === "Menunggu Konfirmasi" &&
+                    handleBayar(m.id)
                   }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.borderColor = "var(--gray-light)")
-                  }
+                  onMouseEnter={(e) => {
+                    if (
+                      !processing &&
+                      pemesanan.status_pesan === "Menunggu Konfirmasi"
+                    ) {
+                      e.currentTarget.style.borderColor = "var(--primary)";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "var(--gray-light)";
+                  }}
                 >
                   <div>
                     <h3>{m.metode_pembayaran}</h3>
@@ -240,13 +298,16 @@ export default function CheckoutPage() {
                       background:
                         pemesanan.status_pesan !== "Menunggu Konfirmasi"
                           ? "#999"
-                          : "var(--primary)",
+                          : processing
+                            ? "#ccc"
+                            : "var(--primary)",
                       color: "white",
                       border: "none",
                       borderRadius: "8px",
                       fontWeight: "600",
                       cursor:
-                        pemesanan.status_pesan !== "Menunggu Konfirmasi"
+                        pemesanan.status_pesan !== "Menunggu Konfirmasi" ||
+                        processing
                           ? "not-allowed"
                           : "pointer",
                     }}
